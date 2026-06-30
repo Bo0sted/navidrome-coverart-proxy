@@ -72,7 +72,7 @@ networks:
 
 The proxy must share a Docker network with Navidrome so it can resolve the
 backend by name. `NAVIDROME_INTERNAL_URL` should point at the backend over that
-internal network and must not be a public address — keeping it private is the
+internal network and must not be a public address, keeping it private is the
 entire point.
 
 ## Feishin
@@ -113,12 +113,12 @@ Each of these is enforced in code, not left to convention:
 
 - **The backend never goes public.** Navidrome is reachable only over the shared
   internal Docker network. The proxy is the only host that can talk to it, so its
-  address, ports, and the service itself never touch the internet — and the share
+  address, ports, and the service itself never touch the internet, and the share
   tokens it emits are useless to anyone who can't already reach the backend.
-- **A strict endpoint allowlist.** Only the three cover-art paths are recognized.
-  Every other path gets a 404 the proxy generates itself, so it never reaches
-  Navidrome — no traversal, no pass-through fallback, no route to the library or
-  admin API.
+- **A strict endpoint allowlist.** Only the three cover-art paths are recognized:
+  the metadata lookup, the cover-art image, and the share-image path. Every other
+  path gets a 404 the proxy generates itself, so it never reaches Navidrome, with
+  no traversal, no pass-through fallback, and no route to the library or admin API.
 - **Method-aware routing.** Each path accepts one method (metadata is POST-only,
   images are GET/HEAD). Wrong verbs are rejected before the backend is contacted.
 - **Input validation on everything forwarded.** Only a fixed query-parameter set
