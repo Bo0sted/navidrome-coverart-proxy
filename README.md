@@ -82,13 +82,15 @@ internal network and must not be a public address — keeping it private is the
 entire point.
 
 ## Feishin
-Step 1: Open the top left hamburger menu next to the search bar
-Step 2: Click on your server
-Step 3: In the newly opened menu, click "Manage servers"
-Step 4: Click on your server once more to reveal the Edit button
-Step 5: In the edit menu, locate the "Public URL" field
-Step 6: Paste the public URL for your proxy
-Sidenote: Checking "Prefer public URL" will route _all_ music streaming through your proxy and break Feishin since this proxy was not designed for this use case. Leave that box unchecked and paste your real Navidrome server URL into the "URL" field.
+Steps to activate proxy in Feishin:
+- Open the top left hamburger menu next to the search bar
+- Click on your server
+- In the newly opened menu, click "Manage servers"
+- Click on your server once more to reveal the Edit button
+- In the edit menu, locate the "Public URL" field
+- Paste the public URL for your proxy
+# Sidenote
+Checking "Prefer public URL" will route _all_ music streaming through your proxy and break Feishin since this proxy was not designed for this use case. Leave that box unchecked and paste your real Navidrome server URL into the "URL" field.
 
 Done! Feishin will now serve Discord your cover art through the _Public URL field_, and continue streaming your music through the _URL field_. 
 
