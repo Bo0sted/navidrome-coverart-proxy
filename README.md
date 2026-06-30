@@ -109,65 +109,40 @@ login token, or your library.
 
 ### What the proxy protects
 
-Running cover art through the proxy instead of exposing Navidrome directly gives
-you the following, each enforced in code rather than left to convention:
+Each of these is enforced in code, not left to convention:
 
+- **The backend never goes public.** Navidrome is reachable only over the shared
+  internal Docker network. The proxy is the only host that can talk to it, so its
+  address, ports, and the service itself never touch the internet — and the share
+  tokens it emits are useless to anyone who can't already reach the backend.
+- **A strict endpoint allowlist.** Only the three cover-art paths are recognized.
+  Every other path gets a 404 the proxy generates itself, so it never reaches
+  Navidrome — no traversal, no pass-through fallback, no route to the library or
+  admin API.
+- **Method-aware routing.** Each path accepts one method (metadata is POST-only,
+  images are GET/HEAD). Wrong verbs are rejected before the backend is contacted.
+- **Input validation on everything forwarded.** Only a fixed query-parameter set
+  (`id`, `u`, `s`, `t`, `v`, `c`, `size`, `f`) is passed upstream; `id` must match
+  a tight pattern (≤64 chars), `size` must be numeric, and share tokens are
+  pattern-checked. Junk and injection-style input never reaches Navidrome.
+- **Server fingerprint stripped.** The backend's name and version (`type`,
+  `serverVersion`) are removed from every metadata response, JSON and XML, errors
+  included.
+- **Internal addresses rewritten, with a fail-safe.** Backend image links are
+  rewritten to the public hostname; if any backend reference survives the rewrite,
+  the proxy discards the body and returns a safe empty response.
+- **No spoofable client data reaches the backend.** Forwarding headers
+  (`X-Forwarded-For`, `X-Forwarded-Host`, `X-Forwarded-Proto`, `X-Forwarded-Port`,
+  `X-Real-Ip`, `Forwarded`) are stripped before the upstream request.
+- **Image content-type enforced.** A response is only returned if the backend
+  labeled it `image/*`; anything else becomes a 404.
+- **Bounded resource use.** Image bodies (25 MiB), metadata bodies (8 KiB), and
+  headers are capped, and every upstream call has a timeout.
+- **Stateless, no credentials stored.** No accounts, no passwords, no persistent
+  state beyond an in-memory image cache.
 
-The backend never goes public. Navidrome stays reachable only over the
-shared internal Docker network. The proxy is the single host that can talk to
-it, so its address, its open ports, and the service itself are never on the
-internet. Even the share tokens the proxy hands out are useless to anyone who
-can't already reach the backend, which is no one but the proxy.
-A strict endpoint allowlist. Only the three paths a client needs for cover
-art are recognized — the metadata lookup, the cover-art image, and the
-share-image path. Every other path is refused with a 404 that the proxy
-generates itself, so an unlisted request never reaches Navidrome at all. There
-is no path traversal, no "pass anything through" fallback, and no way to reach
-the library, the admin API, or any other endpoint through this hostname.
-Method-aware routing. Each allowlisted path accepts exactly one method
-(the metadata endpoint is POST-only, the image endpoints are GET/HEAD). A
-request with the wrong verb is rejected before the backend is contacted, so an
-approved path can't be repurposed by changing the method.
-Input validation on everything forwarded. Only a fixed set of query
-parameters (id, u, s, t, v, c, size, f) is ever passed
-upstream; anything else is dropped. The id must match a tight pattern (≤64
-characters of A–Z a–z 0–9 _ -) or the request is refused, size is
-discarded unless it's purely numeric, and share tokens are pattern-checked
-before use. Junk, oversized, or injection-style parameters don't make it to
-Navidrome.
-Server fingerprint stripped from responses. The backend's software name
-and version (type, serverVersion) are removed from every metadata
-response, in both JSON and XML form, including error responses. A failed login
-or a missing-album error reveals nothing about what's running behind the proxy.
-Internal addresses rewritten, with a fail-safe. Image links that Navidrome
-fills with its own internal address are rewritten to the proxy's public
-hostname. If, after rewriting, any reference to the backend host still remains
-in the response, the proxy discards the body entirely and returns a safe empty
-response rather than risk leaking the address.
-No spoofable client data reaches the backend. Every forwarding header a
-caller might set to lie about their origin — X-Forwarded-For,
-X-Forwarded-Host, X-Forwarded-Proto, X-Forwarded-Port, X-Real-Ip,
-Forwarded — is stripped before the upstream request is made. The backend
-only ever sees a fixed, minimal request from the proxy itself.
-Image responses are content-type enforced. A response is only returned as
-an image if the backend actually labeled it image/*. Anything else becomes a
-404, so the image endpoints can't be coaxed into relaying non-image content.
-Bounded resource use. Upstream image bodies are capped (25 MiB), metadata
-request bodies are capped (8 KiB), request headers are capped, and every
-upstream call has a timeout. This limits the blast radius of a malformed or
-abusive request.
-Stateless, no credentials stored. The proxy holds no accounts, no
-passwords, and no persistent state beyond an in-memory image cache. The
-share-token model means the URLs it emits carry an album reference only — never
-account credentials.
-A health check that reveals nothing. /healthcheck reports whether the
-backend is reachable as a plain yes/no, without naming, versioning, or
-locating it.
-
-
-The container itself is also run locked down in the quick start:
-read-only root filesystem, all Linux capabilities dropped, and
-no-new-privileges set.
+The container is also run locked down in the [quick start](#quick-start):
+read-only root filesystem, all capabilities dropped, and `no-new-privileges` set.
 
 ## Verification
 
@@ -175,138 +150,174 @@ To confirm the above, each request below was run two ways, once straight to the
 unprotected backend and once through the proxy. Every output shown is a real
 response captured during testing.
 
-Placeholders are in caps: HOST is whichever endpoint is being tested (the
-backend directly, or the proxy), BACKEND is the private server address,
-PUBLIC is the proxy's public hostname, ID is an album or cover ID, and
-AUTH is the login parameters (u, s, t, v, c).
+Placeholders are in caps: `HOST` is whichever endpoint is being tested (the
+backend directly, or the proxy), `BACKEND` is the private server address,
+`PUBLIC` is the proxy's public hostname, `ID` is an album or cover ID, and
+`AUTH` is the login parameters (`u`, `s`, `t`, `v`, `c`).
 
-Test 1 — Album info
+### Test 1 — Album info
 
 Album info is normally filled with links pointing straight at the private
 server. This is the largest leak risk. The endpoint expects a POST.
 
+```
 curl -X POST "http://HOST/rest/getAlbumInfo2.view?id=ID&AUTH&f=json"
+```
 
 Unprotected, the response names the software, gives the exact version and build,
 and points every image link at the real internal address:
 
-json{"subsonic-response":{"status":"ok","version":"1.16.1","type":"navidrome","serverVersion":"0.62.0 (1b46b977)","openSubsonic":true,"albumInfo":{
+```json
+{"subsonic-response":{"status":"ok","version":"1.16.1","type":"navidrome","serverVersion":"0.62.0 (1b46b977)","openSubsonic":true,"albumInfo":{
   "lastFmUrl":"https://www.last.fm/music/...",
   "smallImageUrl":"http://BACKEND/share/img/<token>?size=300",
   "mediumImageUrl":"http://BACKEND/share/img/<token>?size=600",
   "largeImageUrl":"http://BACKEND/share/img/<token>?size=1200"
 }}}
+```
 
-Through the proxy, every image link points at the public address, the type and
-serverVersion fields are gone, and the login token is never echoed back:
+Through the proxy, every image link points at the public address, the `type` and
+`serverVersion` fields are gone, and the login token is never echoed back:
 
-json{"subsonic-response":{"status":"ok","version":"1.16.1","openSubsonic":true,"albumInfo":{
+```json
+{"subsonic-response":{"status":"ok","version":"1.16.1","openSubsonic":true,"albumInfo":{
   "lastFmUrl":"https://www.last.fm/music/...",
   "smallImageUrl":"https://PUBLIC/share/img/<token>?size=300",
   "mediumImageUrl":"https://PUBLIC/share/img/<token>?size=600",
   "largeImageUrl":"https://PUBLIC/share/img/<token>?size=1200"
 }}}
+```
 
-The <token> is Navidrome's share token. It encodes only an album reference and
+The `<token>` is Navidrome's share token. It encodes only an album reference and
 issuer, no account credentials, and can only be used by a host that can
 already reach the backend.
 
-Test 2 — Cover art image headers
+### Test 2 — Cover art image headers
 
 Every image response carries technical headers.
 
+```
 curl -D - -o /dev/null "http://HOST/rest/getCoverArt.view?id=ID&AUTH"
+```
 
-Unprotected, the response includes headers (Last-Modified,
-Permissions-Policy, Referrer-Policy, Vary, X-Content-Type-Options,
-X-Frame-Options, Transfer-Encoding, and more) that together help identify
+Unprotected, the response includes headers (`Last-Modified`,
+`Permissions-Policy`, `Referrer-Policy`, `Vary`, `X-Content-Type-Options`,
+`X-Frame-Options`, `Transfer-Encoding`, and more) that together help identify
 the software even with no name attached.
 
 Through the proxy, the response is reduced to a small neutral set:
 
+```
 HTTP/1.1 200 OK
 Cache-Control: public, max-age=3600
 Content-Length: 21090
 Content-Type: image/webp
 X-Cache: MISS
+```
 
-Test 3 — Failed login
+### Test 3 — Failed login
 
 A request with a wrong token, to see what a rejection reveals. As with all
 metadata requests, this is a POST.
 
+```
 curl -X POST "http://HOST/rest/getAlbumInfo2.view?id=ID&u=USER&t=wrong&s=wrong"
+```
 
 Unprotected, even a failed login fingerprints the server:
 
-json{"subsonic-response":{"status":"failed","version":"1.16.1","type":"navidrome","serverVersion":"0.62.0 (1b46b977)","openSubsonic":true,"error":{"code":40,"message":"Wrong username or password"}}}
+```json
+{"subsonic-response":{"status":"failed","version":"1.16.1","type":"navidrome","serverVersion":"0.62.0 (1b46b977)","openSubsonic":true,"error":{"code":40,"message":"Wrong username or password"}}}
+```
 
 Through the proxy, the rejection carries nothing about the backend:
 
-json{"subsonic-response":{"status":"failed","version":"1.16.1","openSubsonic":true,"error":{"code":40,"message":"Wrong username or password"}}}
+```json
+{"subsonic-response":{"status":"failed","version":"1.16.1","openSubsonic":true,"error":{"code":40,"message":"Wrong username or password"}}}
+```
 
-Test 4 — Missing data
+### Test 4 — Missing data
 
 A request for an album that does not exist, in case an error reveals details.
 
+```
 curl -X POST "http://HOST/rest/getAlbumInfo2.view?id=DOESNOTEXIST&AUTH"
+```
 
 Unprotected, a missing item still exposes the name and version:
 
-json{"subsonic-response":{"status":"failed","version":"1.16.1","type":"navidrome","serverVersion":"0.62.0 (1b46b977)","openSubsonic":true,"error":{"code":70,"message":"data not found"}}}
+```json
+{"subsonic-response":{"status":"failed","version":"1.16.1","type":"navidrome","serverVersion":"0.62.0 (1b46b977)","openSubsonic":true,"error":{"code":70,"message":"data not found"}}}
+```
 
 Through the proxy:
 
-json{"subsonic-response":{"status":"failed","version":"1.16.1","openSubsonic":true,"error":{"code":70,"message":"data not found"}}}
+```json
+{"subsonic-response":{"status":"failed","version":"1.16.1","openSubsonic":true,"error":{"code":70,"message":"data not found"}}}
+```
 
-Test 5 — A path that is not allowlisted
+### Test 5 — A path that is not allowlisted
 
 The proxy forwards only the cover-art endpoints. Any other path is refused
 before the backend is ever contacted. Here the request uses valid credentials
 and asks for the full artist list, an endpoint the proxy does not serve.
 
+```
 curl "http://HOST/rest/getArtists.view?AUTH&f=json"
+```
 
 Sent to the backend directly, the authenticated request returns the entire
 artist list and sets a session cookie in the response:
 
+```
 HTTP/1.1 200 OK
 Set-Cookie: nd-player-...; Path=/; HttpOnly; SameSite=Strict
 {"subsonic-response":{"status":"ok","type":"navidrome","serverVersion":"0.62.0 (1b46b977)", ... full artist list ... }}
+```
 
 The same request through the proxy never reaches the backend. The path is not on
 the allowlist, so the proxy returns a 404 on its own:
 
+```
 404
+```
 
 This is about exposure, not authentication: the backend behaves normally for an
 authenticated client, but the proxy only ever forwards the handful of cover-art
 endpoints, so everything else, including the library, stays out of reach of the
 internet.
 
-Test 6 — Wrong method on an allowlisted path
+### Test 6 — Wrong method on an allowlisted path
 
 The allowlist is method-aware. Each endpoint accepts a single method; the
 metadata endpoint is POST-only. A GET to it is refused without contacting the
 backend.
 
+```
 curl "http://PROXY/rest/getAlbumInfo2.view?id=ID&AUTH"
+```
 
+```
 method not allowed
+```
 
-Test 7 — Health check
+### Test 7 — Health check
 
 A status check.
 
+```
 curl "http://PROXY/healthcheck"
+```
 
+```
 Proxy: OK
 Backend: Reachable
+```
 
 This confirms the proxy is running and the backend is reachable as a simple yes or
 no, without naming or locating the backend.
 
-Summary
+### Summary
 
 Sent to the backend directly, the responses give up its name, version, exact
 build, internal address, a fingerprint, a session cookie,
