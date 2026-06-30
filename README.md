@@ -89,7 +89,7 @@ Steps to activate proxy in Feishin:
 - Click on your server once more to reveal the Edit button
 - In the edit menu, locate the "Public URL" field
 - Paste the public URL for your proxy
-# Sidenote
+### Sidenote
 Checking "Prefer public URL" will route _all_ music streaming through your proxy and break Feishin since this proxy was not designed for this use case. Leave that box unchecked and paste your real Navidrome server URL into the "URL" field.
 
 Done! Feishin will now serve Discord your cover art through the _Public URL field_, and continue streaming your music through the _URL field_. 
