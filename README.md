@@ -9,6 +9,7 @@ Navidrome clients that support Discord's RPC integration like Feishin do work wi
 
 - [How it works](#how-it-works)
 - [Quick start](#quick-start)
+- [Feishin proxy activation](#feishin)
 - [Configuration](#configuration)
 - [Security testing](#security-testing)
   - [Test 1 — Album info](#test-1--album-info)
@@ -79,6 +80,19 @@ The proxy must share a Docker network with Navidrome so it can resolve the
 backend by name. `NAVIDROME_INTERNAL_URL` should point at the backend over that
 internal network and must not be a public address — keeping it private is the
 entire point.
+
+## Feishin
+Step 1: Open the top left hamburger menu next to the search bar
+Step 2: Click on your server
+Step 3: In the newly opened menu, click "Manage servers"
+Step 4: Click on your server once more to reveal the Edit button
+Step 5: In the edit menu, locate the "Public URL" field
+Step 6: Paste the public URL for your proxy
+Sidenote: Checking "Prefer public URL" will route _all_ music streaming through your proxy and break Feishin since this proxy was not designed for this use case. Leave that box unchecked and paste your real Navidrome server URL into the "URL" field.
+
+Done! Feishin will now serve Discord your cover art through the _Public URL field_, and continue streaming your music through the _URL field_. 
+
+
 
 ## Configuration
 
