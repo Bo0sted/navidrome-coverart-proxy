@@ -1,8 +1,6 @@
 # navidrome-coverart-proxy
 
-# It seems this short lived project was all for nothing lol, but I still had fun making it.
-
-### Check out [this official Navidrome plugin](https://github.com/navidrome/discord-rich-presence-plugin) which elegantly solves the issue this proxy is trying to solve.
+### It seems this short lived project was all for nothing lol, but I still had fun making it. Check out [this official Navidrome plugin](https://github.com/navidrome/discord-rich-presence-plugin) which elegantly solves the issue this proxy is trying to solve.
 
 A small, hardened proxy that lets Discord display your Navidrome cover
 art without exposing Navidrome to the internet.
